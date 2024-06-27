@@ -1,0 +1,66 @@
+import pandas as pd
+import os
+import glob
+
+# Caminho para ler o caminho
+folder_path = os.path.join(os.getcwd(), 'src', 'data', 'raw')
+
+# Lista de arquivos
+glob_unix_pattern = os.path.join(folder_path, '*.xlsx')
+excel_files = glob.glob( glob_unix_pattern )
+
+if not excel_files:
+    print('No file found in the specified folder')
+    raise ValueError('No file found in the specified folder')
+else:
+    # Dataframe - data in memory
+    dfs = []
+
+    for excel_file in excel_files:
+        try:
+            # Leitura de XLSX
+            df_temp = pd.read_excel(excel_file)
+
+            # Principio da rastreabilidade
+            # Nome do arquivo
+            df_temp['filename'] = os.path.basename(excel_file)
+
+            # Extração da localização da tabela
+            df_temp['location'] = df_temp['filename'].str.split('_')[-1]
+            df_temp['location'] = df_temp['location'].str.split('.')[0].str.lower()
+
+            # Extração de info sobre campaign - UTM
+            # df_temp = df_temp['utm_link'].str.split('utm_source=').str[-1]
+            df_temp = df_temp['utm_link'].str.extract(r'utm_campaign=(.*)')  # no extract recebe um padrão de regex
+
+            df_temp['campaign'] = df_temp[df_temp['utm_source'].notnull()]['utm_campaign']
+            df_temp['utm_source'] = df_temp[df_temp['utm_source'].notnull()]['utm_source']
+
+            # Conjunto de tabelas
+            dfs.append(df_temp)
+
+        except Exception as e:
+            print(f'Erro ao ler o arquivo {excel_file}: {e}')
+
+
+if len(dfs) != 0:
+    # Concatena todas as tabelas contidas no dfs em um única tabela
+    result = pd.concat( dfs, ignore_index=True)
+
+    # Cria o caminho da nova tabela tratada
+    output_file = os.path.join(os.getcwd(), 'src', 'data', 'ready', 'netflix_data_cleaned.xlsx')
+
+    # Criação da instância com especificação de motor (opcional)
+    writer = pd.ExcelWriter(output_file, engine='xlsxwriter')  # mudança do motor de escrita. XLSXWRITER pode ser mais performático
+
+    # Persistência da tabela em um arquivo excel e fechamento do arquivo
+    result.to_excel(writer, sheet_name='netflix_data_cleaned', index=False)
+    writer.save()
+    writer.close()
+else:
+    print('Nenhum dado para ser salvo')
+
+
+
+
+
